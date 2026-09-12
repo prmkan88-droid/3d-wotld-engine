@@ -12,6 +12,7 @@ import {
   StaticVantagePoint,
 } from '../types';
 import { globalBiomeSystem } from './biomeSystem';
+import { CameraCollisionSystem, globalCameraCollision } from './cameraCollision';
 
 export const STATIC_VANTAGE_POINTS: StaticVantagePoint[] = [
   {
@@ -197,6 +198,9 @@ export class CinematicDirector {
   // Trajectories list
   public trajectories: CutsceneTrajectory[] = [...EXTENDED_CUTSCENE_PRESETS];
 
+  // Anti-clipping collision avoidance system
+  public collisionSystem: CameraCollisionSystem = globalCameraCollision;
+
   constructor(camera: THREE.PerspectiveCamera) {
     this.camera = camera;
     this.playCutscene('mountain_crest');
@@ -300,9 +304,8 @@ export class CinematicDirector {
     const currentPos = new THREE.Vector3().lerpVectors(this.transStartPos, this.transTargetPos, ease);
     currentPos.y += arcHeight;
 
-    // Keep safe clearance above terrain
-    const gh = globalBiomeSystem.getHeight(currentPos.x, currentPos.z);
-    currentPos.y = Math.max(currentPos.y, gh + 4.0);
+    // Resolve continuous terrain texture and cliff collision
+    this.collisionSystem.resolveCollision(currentPos, delta, false);
 
     this.camera.position.copy(currentPos);
 
@@ -342,11 +345,11 @@ export class CinematicDirector {
     const py = THREE.MathUtils.lerp(kf1.pos[1], kf2.pos[1], ease);
     const pz = THREE.MathUtils.lerp(kf1.pos[2], kf2.pos[2], ease);
 
-    // Prevent camera from clipping under ground during cutscenes
-    const groundY = globalBiomeSystem.getHeight(px, pz);
-    const safeY = Math.max(py, groundY + 3.8);
+    const targetPos = new THREE.Vector3(px, py, pz);
 
-    this.camera.position.set(px, safeY, pz);
+    // Dynamic anti-clipping & multi-probe terrain collision avoidance
+    this.collisionSystem.resolveCollision(targetPos, delta, false);
+    this.camera.position.copy(targetPos);
 
     // Interpolate lookAt target
     const lx = THREE.MathUtils.lerp(kf1.lookAt[0], kf2.lookAt[0], ease);
@@ -375,11 +378,14 @@ export class CinematicDirector {
     const swayY = Math.cos(time * 0.6) * 0.25;
     const swayZ = Math.sin(time * 0.4) * 0.45;
 
-    this.camera.position.set(
+    const targetPos = new THREE.Vector3(
       vantage.pos[0] + swayX,
       vantage.pos[1] + swayY,
       vantage.pos[2] + swayZ
     );
+
+    this.collisionSystem.resolveCollision(targetPos, delta, false);
+    this.camera.position.copy(targetPos);
 
     // Slight tracking focal drift
     this.lookTarget.set(
@@ -428,11 +434,8 @@ export class CinematicDirector {
     this.camera.position.add(move);
     this.camera.rotation.copy(this.rotation);
 
-    // Keep above terrain
-    const minHeight = globalBiomeSystem.getHeight(this.camera.position.x, this.camera.position.z) + 3.0;
-    if (this.camera.position.y < minHeight) {
-      this.camera.position.y = minHeight;
-    }
+    // Multi-probe terrain & cliff collision avoidance with spring-cushion repulsion
+    this.collisionSystem.resolveCollision(this.camera.position, delta, true);
 
     this.currentKeyframeText = `Free Flight Drone (${isBoost ? 'High-Speed Thrusters' : 'Cruise'})`;
   }
@@ -468,8 +471,12 @@ export class CinematicDirector {
     this.camera.position.x += move.x;
     this.camera.position.z += move.z;
 
+    // Ground walk: smoothly keep camera at human eye height (2.2m) above exact terrain surface
     const groundY = globalBiomeSystem.getHeight(this.camera.position.x, this.camera.position.z);
-    this.camera.position.y = Math.max(groundY + 2.2, 9.5);
+    this.camera.position.y = Math.max(groundY + 2.2, 9.6);
+
+    // Ensure collision bounds
+    this.collisionSystem.resolveCollision(this.camera.position, delta, true);
 
     this.camera.rotation.copy(this.rotation);
     this.currentKeyframeText = 'Ground Walk Inspection';
@@ -478,9 +485,13 @@ export class CinematicDirector {
   private updateOrbit(delta: number) {
     const time = performance.now() * 0.0002;
     const radius = 230;
-    this.camera.position.x = Math.cos(time) * radius;
-    this.camera.position.z = Math.sin(time) * radius;
-    this.camera.position.y = 75 + Math.sin(time * 2.0) * 15;
+    const targetPos = new THREE.Vector3(
+      Math.cos(time) * radius,
+      75 + Math.sin(time * 2.0) * 15,
+      Math.sin(time) * radius
+    );
+    this.collisionSystem.resolveCollision(targetPos, delta, false);
+    this.camera.position.copy(targetPos);
     this.camera.lookAt(0, 30, 0);
     this.currentKeyframeText = '360° Continental Orbit';
   }

@@ -39,6 +39,8 @@ import {
   Navigation,
   X,
   Volume2,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react';
 import { WorldEngine } from '../engine/WorldEngine';
 import {
@@ -92,6 +94,11 @@ export const HUD: React.FC<HUDProps> = ({ engine, stats }) => {
   const [volumetricRays, setVolumetricRays] = useState(engine?.settings.volumetricRays ?? true);
   const [occlusionCull, setOcclusionCull] = useState(engine?.settings.occlusionCulling ?? true);
   const [quality, setQuality] = useState<QualityPreset>('high-100fps');
+
+  // Camera Anti-Clipping & Terrain Collision Avoidance
+  const [antiClippingEnabled, setAntiClippingEnabled] = useState(true);
+  const [minGroundClearance, setMinGroundClearance] = useState(3.2);
+  const [cliffRepulsion, setCliffRepulsion] = useState(1.4);
 
   // Biome Generation Parameters state
   const [biomeParams, setBiomeParams] = useState<BiomeParameters>({
@@ -674,6 +681,90 @@ export const HUD: React.FC<HUDProps> = ({ engine, stats }) => {
                   Ground Inspection Walk
                 </button>
               </div>
+            </div>
+
+            {/* Camera Terrain & Texture Anti-Clipping System */}
+            <div className="mb-[10px] p-[8px] bg-neutral-900/90 rounded-[8px] border border-emerald-900/50 shadow-inner">
+              <div className="flex items-center justify-between mb-[6px]">
+                <div className="flex items-center gap-[6px]">
+                  {antiClippingEnabled ? (
+                    <ShieldCheck className="w-[14px] h-[14px] text-emerald-400" />
+                  ) : (
+                    <ShieldAlert className="w-[14px] h-[14px] text-amber-400" />
+                  )}
+                  <span className="text-[11px] font-bold text-neutral-200">
+                    Anti-Clipping Protection
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    const nextVal = !antiClippingEnabled;
+                    setAntiClippingEnabled(nextVal);
+                    if (engine) {
+                      engine.cinematicDirector.collisionSystem.settings.enabled = nextVal;
+                    }
+                  }}
+                  className={`px-[8px] py-[3px] rounded-[6px] text-[10px] font-bold transition-all ${
+                    antiClippingEnabled
+                      ? 'bg-emerald-500 text-neutral-950 shadow-sm'
+                      : 'bg-neutral-800 text-neutral-400 border border-neutral-700'
+                  }`}
+                >
+                  {antiClippingEnabled ? 'Protected (Active)' : 'Bypassed'}
+                </button>
+              </div>
+
+              {antiClippingEnabled && (
+                <div className="space-y-[6px] pt-[4px] border-t border-neutral-800/80">
+                  <div>
+                    <div className="flex justify-between text-[10px] text-neutral-400 mb-[2px]">
+                      <span>Ground Elevation Clearance</span>
+                      <span className="text-emerald-400 font-mono font-semibold">{minGroundClearance.toFixed(1)} m</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1.5"
+                      max="6.0"
+                      step="0.1"
+                      value={minGroundClearance}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setMinGroundClearance(val);
+                        if (engine) {
+                          engine.cinematicDirector.collisionSystem.settings.minGroundClearance = val;
+                        }
+                      }}
+                      className="w-full accent-emerald-400 h-[4px]"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-[10px] text-neutral-400 mb-[2px]">
+                      <span>Cliff Wall Repulsion Force</span>
+                      <span className="text-emerald-400 font-mono font-semibold">{cliffRepulsion.toFixed(1)}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="3.0"
+                      step="0.1"
+                      value={cliffRepulsion}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setCliffRepulsion(val);
+                        if (engine) {
+                          engine.cinematicDirector.collisionSystem.settings.cliffRepulsion = val;
+                        }
+                      }}
+                      className="w-full accent-emerald-400 h-[4px]"
+                    />
+                  </div>
+
+                  <p className="text-[9px] text-neutral-400 leading-tight">
+                    Multi-probe radial sampling prevents camera from penetrating rock faces, mountains, and water surface.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* If in Cutscene Mode: Trajectory Presets */}
