@@ -1,0 +1,6 @@
+{
+  "name": "Aetheria 3D World Landscape Engine",
+  "description": "High-performance 3D world landscape map running at target 100 FPS with realistic lighting, volumetric atmosphere, LOD terrain, dynamic weather, day-night cycle, post-processing color grading, and cinematic cutscene director.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
